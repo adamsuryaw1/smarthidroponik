@@ -27,6 +27,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
+with app.app_context():
+    db.create_all()
 
 manual_control = {
     "pompa_a": 0,
@@ -561,10 +563,17 @@ def watering_report_api():
 
         return jsonify(results)
 
-# =========================
-# RUN SERVER
-# =========================
-if __name__ == '__main__':
+# # =========================
+# # RUN SERVER
+# # =========================
+# if __name__ == '__main__':
+#     init_db()
+#     load_auto_control()
+#     app.run(host='0.0.0.0', port=5000, debug=True)
+
+with app.app_context():
     init_db()
     load_auto_control()
+
+if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
