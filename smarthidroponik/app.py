@@ -9,28 +9,24 @@ BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 # Fallback to local sqlite file when DATABASE_URL is not provided
 DB_FILE = os.path.join(BASE_DIR, "database", "database.db")
+_env_db = os.getenv('DATABASE_URL')
+if _env_db:
+    database_url = _env_db
+    # Railway (and some providers) use the legacy `postgres://` scheme — SQLAlchemy
+    # prefers the explicit driver prefix. Convert to `postgresql+psycopg2://`.
+    if database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql+psycopg2://', 1)
+    elif database_url.startswith('postgresql://'):
+        database_url = database_url.replace('postgresql://', 'postgresql+psycopg2://', 1)
+else:
+    # ensure sqlite path uses forward slashes
+    db_path = DB_FILE.replace('\\', '/')
+    database_url = f"sqlite:///{db_path}"
 
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-database_url = os.getenv("DATABASE_URL")
-
-if database_url and database_url.startswith("postgres://"):
-    database_url = database_url.replace(
-        "postgres://",
-        "postgresql://",
-        1
-    )
-
-app.config["SQLALCHEMY_DATABASE_URI"] = (
-    database_url or f"sqlite:///{DB_FILE}"
-)
-
-
 db = SQLAlchemy(app)
-with app.app_context():
-    init_db()
-    load_auto_control()
 
 manual_control = {
     "pompa_a": 0,
