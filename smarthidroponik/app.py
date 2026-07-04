@@ -27,8 +27,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
-with app.app_context():
-    db.create_all()
 
 manual_control = {
     "pompa_a": 0,
@@ -130,8 +128,6 @@ class GrowthPhase(db.Model):
 # INIT DATABASE
 # =========================
 def init_db():
-    db.create_all()
-
     ac = AutoControl.query.get(1)
     if ac is None:
         ac = AutoControl(
