@@ -1,0 +1,1471 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Hydroponic Control</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Chart.js -->
+   <script
+    src="{{ url_for('static', filename='chart.js') }}">
+    </script>
+    <style>
+        :root {
+            --primary-color: #2e7d32;
+            --secondary-color: #4caf50;
+            --bg-color: #f4f7f6;
+            --text-color: #333;
+            --text-light: #777;
+            --card-bg: rgba(255, 255, 255, 0.85);
+            --sidebar-bg: linear-gradient(180deg, #2e7d32 0%, #1b5e20 100%);
+            --shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
+            --radius: 16px;
+            --transition: all 0.3s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            min-height: 100vh;
+            background-image: radial-gradient(circle at top right, #e8f5e9 0%, transparent 40%),
+                radial-gradient(circle at bottom left, #e8f5e9 0%, transparent 40%);
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: var(--sidebar-bg);
+            color: white;
+            position: fixed;
+            height: 100vh;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 4px 0 24px rgba(46, 125, 50, 0.15);
+            z-index: 100;
+            transition: var(--transition);
+        }
+
+        .sidebar-logo {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 48px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            letter-spacing: 0.5px;
+        }
+
+        .sidebar-logo i {
+            color: #a5d6a7;
+            font-size: 28px;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+        }
+
+        .sidebar-menu {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .sidebar-menu li {
+            border-radius: 12px;
+            cursor: pointer;
+            transition: var(--transition);
+            font-weight: 500;
+            font-size: 15px;
+            color: #e8f5e9;
+            display: flex;
+        }
+
+        .sidebar-menu li a {
+            color: inherit;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            width: 100%;
+            padding: 14px 18px;
+            border-radius: 12px;
+        }
+
+        .sidebar-menu li:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateX(4px);
+        }
+
+        .sidebar-menu li.active {
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border-left: 4px solid #a5d6a7;
+        }
+
+        .user-status {
+            margin-top: auto;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 16px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            backdrop-filter: blur(5px);
+        }
+
+        .user-avatar {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: #a5d6a7;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary-color);
+            font-weight: 700;
+            font-size: 18px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .user-info .name {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .user-info .role {
+            font-size: 12px;
+            color: #c8e6c9;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 260px;
+            flex: 1;
+            padding: 32px 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+            max-width: calc(100vw - 260px);
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--card-bg);
+            padding: 18px 28px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+        }
+
+        .header h1 {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .realtime-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: var(--secondary-color);
+            font-weight: 500;
+            background: rgba(76, 175, 80, 0.1);
+            padding: 6px 14px;
+            border-radius: 20px;
+        }
+
+        .pulse {
+            width: 8px;
+            height: 8px;
+            background-color: var(--secondary-color);
+            border-radius: 50%;
+            animation: pulse-animation 1.5s infinite;
+        }
+
+        @keyframes pulse-animation {
+            0% {
+                box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+            }
+
+            70% {
+                box-shadow: 0 0 0 8px rgba(76, 175, 80, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+            }
+        }
+
+        .btn-refresh {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+            transition: var(--transition);
+            box-shadow: 0 4px 12px rgba(46, 125, 50, 0.2);
+        }
+
+        .btn-refresh:hover {
+            background: #1b5e20;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(46, 125, 50, 0.3);
+        }
+
+        /* Cards */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 24px;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            padding: 24px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            transition: var(--transition);
+            border-bottom: 4px solid transparent;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 100%);
+            pointer-events: none;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            border-bottom-color: var(--secondary-color);
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.08);
+        }
+
+        .stat-icon {
+            width: 54px;
+            height: 54px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.5);
+        }
+
+        .stat-icon.temp {
+            background: linear-gradient(135deg, #ffcdd2, #ef9a9a);
+            color: #c62828;
+        }
+
+        .stat-icon.hum {
+            background: linear-gradient(135deg, #bbdefb, #90caf9);
+            color: #1565c0;
+        }
+
+        .stat-icon.tds {
+            background: linear-gradient(135deg, #ffecb3, #ffe082);
+            color: #f57f17;
+        }
+
+        .stat-icon.ph {
+            background: linear-gradient(135deg, #e1bee7, #ce93d8);
+            color: #6a1b9a;
+        }
+
+        .stat-icon.water {
+            background: linear-gradient(135deg, #b2ebf2, #80deea);
+            color: #00838f;
+        }
+
+        .stat-info {
+            z-index: 1;
+        }
+
+        .stat-info h3 {
+            font-size: 13px;
+            color: var(--text-light);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .stat-info p {
+            font-size: 26px;
+            font-weight: 700;
+            color: var(--text-color);
+            line-height: 1.2;
+        }
+
+        /* Panels */
+        .panels-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 28px;
+        }
+
+        .panel {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            padding: 28px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+        }
+
+        .panel-header {
+            margin-bottom: 24px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+            padding-bottom: 16px;
+        }
+
+        .panel-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-color);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .panel-title i {
+            color: var(--secondary-color);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: var(--text-color);
+            font-weight: 500;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            font-family: inherit;
+            font-size: 14px;
+            outline: none;
+            background: rgba(255, 255, 255, 0.9);
+            transition: var(--transition);
+        }
+
+        .form-control:focus {
+            border-color: var(--secondary-color);
+            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.15);
+        }
+
+        .btn-save {
+            background: linear-gradient(135deg, var(--secondary-color), var(--primary-color));
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            width: 100%;
+            font-size: 15px;
+            transition: var(--transition);
+            box-shadow: 0 4px 12px rgba(46, 125, 50, 0.2);
+        }
+
+        .btn-save:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(46, 125, 50, 0.3);
+        }
+
+        .info-box {
+            background: linear-gradient(to right, #f1f8e9, #e8f5e9);
+            padding: 18px;
+            border-radius: 12px;
+            margin-top: 24px;
+            font-size: 14px;
+            color: var(--primary-color);
+            border-left: 4px solid var(--secondary-color);
+        }
+
+        .info-box ul {
+            margin-top: 10px;
+            padding-left: 20px;
+            color: #33691e;
+        }
+
+        .info-box li {
+            margin-bottom: 4px;
+        }
+
+        /* Toggle switches */
+        .control-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            border-bottom: 1px dashed rgba(0, 0, 0, 0.1);
+        }
+
+        .control-item:last-child {
+            border-bottom: none;
+        }
+
+        .control-label {
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 15px;
+            color: var(--text-color);
+        }
+
+        .control-label i {
+            color: #9e9e9e;
+            width: 20px;
+            text-align: center;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 52px;
+            height: 28px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #e0e0e0;
+            transition: .4s;
+            border-radius: 34px;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            border-radius: 50%;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        input:checked+.slider {
+            background-color: var(--secondary-color);
+        }
+
+        input:checked+.slider:before {
+            transform: translateX(24px);
+        }
+
+        /* Charts Section */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+        }
+
+        .chart-container {
+            background: var(--card-bg);
+            padding: 24px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            position: relative;
+            height: 320px;
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .chart-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        .badge {
+            background: #e8f5e9;
+            color: var(--primary-color);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            border: 1px solid #c8e6c9;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            height: 230px;
+            width: 100%;
+        }
+
+        /* Table */
+        .table-container {
+            background: var(--card-bg);
+            padding: 28px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+        }
+
+        .table-header {
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .table-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        .table-responsive {
+            overflow-x: auto;
+            border-radius: 10px;
+            border: 1px solid #eee;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            white-space: nowrap;
+        }
+
+        th,
+        td {
+            padding: 16px 20px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            font-weight: 600;
+            color: var(--text-light);
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background-color: #f8fcf8;
+        }
+
+        td {
+            font-size: 14px;
+            color: var(--text-color);
+        }
+
+        tr:nth-child(even) {
+            background-color: rgba(250, 250, 250, 0.5);
+        }
+
+        tr:hover {
+            background-color: #f1f8f1;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-optimal {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .status-warning {
+            background: #fff8e1;
+            color: #f57f17;
+        }
+
+        /* Dosing Status Bar */
+        .dosing-status-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            background: rgba(46,125,50,0.07);
+            border: 1px solid rgba(46,125,50,0.15);
+            margin-bottom: 18px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .dosing-state-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: #9e9e9e;
+            flex-shrink: 0;
+            transition: background 0.3s;
+        }
+        .dosing-state-dot.idle     { background: #9e9e9e; }
+        .dosing-state-dot.dosing   { background: #f57f17; box-shadow: 0 0 6px rgba(245,127,23,0.6); animation: pulse-animation 1s infinite; }
+        .dosing-state-dot.mixing   { background: #1565c0; box-shadow: 0 0 6px rgba(21,101,192,0.5); animation: pulse-animation 1.5s infinite; }
+        .dosing-state-dot.cooldown { background: #6a1b9a; box-shadow: 0 0 6px rgba(106,27,154,0.5); }
+        .dosing-state-dot.safety   { background: #c62828; box-shadow: 0 0 6px rgba(198,40,40,0.6); animation: pulse-animation 0.8s infinite; }
+
+        /* Form grid 2-col */
+        .form-grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        /* Dosing log table */
+        .dosing-log-table th { background: #f3f0f8; color: #6a1b9a; }
+        .log-action-nutrisi { color: #f57f17; font-weight: 600; }
+        .log-action-phup    { color: #1565c0; font-weight: 600; }
+        .log-action-phdown  { color: #c62828; font-weight: 600; }
+
+        /* Smart dosing section full-width */
+        .panels-grid-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 28px;
+        }
+
+        @media (max-width: 1400px) {
+            .cards-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 1100px) {
+            .charts-grid { grid-template-columns: repeat(2, 1fr); }
+            .panels-grid-3 { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 992px) {
+            .panels-grid, .panels-grid-3 { grid-template-columns: 1fr; }
+            .cards-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar { transform: translateX(-100%); }
+            .main-content { margin-left: 0; padding: 20px; max-width: 100vw; }
+            .cards-grid { grid-template-columns: 1fr; }
+            .charts-grid { grid-template-columns: 1fr; }
+            .form-grid-2 { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <i class="fa-solid fa-leaf"></i>
+            HydroAdmin
+        </div>
+        <ul class="sidebar-menu">
+            <li class="active"><a href="/"><i class="fa-solid fa-chart-line"></i> Dashboard</a></li>
+            <li><a href="#"><i class="fa-solid fa-microchip"></i> Devices</a></li>
+            <li><a href="/reports"><i class="fa-solid fa-file-invoice"></i> Reports</a></li>
+            <li><a href="#"><i class="fa-solid fa-gear"></i> Settings</a></li>
+        </ul>
+        <div class="user-status">
+            <div class="user-avatar">
+                <i class="fa-solid fa-user"></i>
+            </div>
+            <div class="user-info">
+                <div class="name">Administrator</div>
+                <div class="role">Admin Status</div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Header -->
+        <header class="header">
+            <h1>Smart Hydroponic Control</h1>
+            <div class="header-actions">
+                <div class="realtime-indicator">
+                    <div class="pulse"></div>
+                    Realtime Monitoring
+                </div>
+                <button class="btn-refresh" id="btn-refresh">
+                    <i class="fa-solid fa-rotate-right"></i>
+                    Refresh
+                </button>
+            </div>
+        </header>
+
+        <!-- Monitoring Cards -->
+        <div class="cards-grid">
+            <div class="stat-card">
+                <div class="stat-icon temp">
+                    <i class="fa-solid fa-temperature-half"></i>
+                </div>
+                <div class="stat-info">
+                    <h3>Suhu Ruangan</h3>
+                    <p id="val-temp">-- °C</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon hum">
+                    <i class="fa-solid fa-droplet"></i>
+                </div>
+                <div class="stat-info">
+                    <h3>Kelembaban</h3>
+                    <p id="val-hum">-- %</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon tds">
+                    <i class="fa-solid fa-flask"></i>
+                </div>
+                <div class="stat-info">
+                    <h3>TDS / PPM</h3>
+                    <p id="val-tds">-- ppm</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon ph">
+                    <i class="fa-solid fa-vial"></i>
+                </div>
+                <div class="stat-info">
+                    <h3>pH Air</h3>
+                    <p id="val-ph">--</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon water">
+                    <i class="fa-solid fa-water"></i>
+                </div>
+                <div class="stat-info">
+                    <h3>Ketinggian Air</h3>
+                    <p id="val-water">-- %</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panels -->
+        <div class="panels-grid-3">
+            <!-- Otomatisasi & Smart Dosing Config Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title"><i class="fa-solid fa-robot"></i> Smart Dosing Control</h2>
+                </div>
+
+                <!-- Dosing Status Indicator -->
+                <div class="dosing-status-bar" id="dosing-status-bar">
+                    <span class="dosing-state-dot idle" id="dosing-state-dot"></span>
+                    <span id="dosing-state-text">Mode: <strong id="mode-badge">MANUAL</strong> &nbsp;|&nbsp; Status: <strong id="dosing-state-label">Idle</strong></span>
+                </div>
+
+                <form>
+                    <div class="form-group">
+                        <label>Mode Operasi</label>
+                        <select class="form-control" id="mode-select">
+                            <option value="MANUAL" selected>Manual</option>
+                            <option value="AUTO">Auto (Smart Dosing)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Umur Bayam (Hari)</label>
+                        <input type="number" id="umur-bayam" class="form-control" placeholder="Contoh: 14" value="14" min="0" max="60">
+                    </div>
+
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label>Target PPM</label>
+                            <input type="number" id="target-ppm" class="form-control" value="300" min="100" max="2000">
+                        </div>
+                        <div class="form-group">
+                            <label>Toleransi PPM (&plusmn;)</label>
+                            <input type="number" id="ppm-tolerance" class="form-control" value="30" min="10" max="200">
+                        </div>
+                        <div class="form-group">
+                            <label>pH Min</label>
+                            <input type="number" id="ph-min" class="form-control" value="5.8" step="0.1" min="4" max="8">
+                        </div>
+                        <div class="form-group">
+                            <label>pH Max</label>
+                            <input type="number" id="ph-max" class="form-control" value="6.2" step="0.1" min="4" max="8">
+                        </div>
+                    </div>
+
+                    <details style="margin-bottom:16px;">
+                        <summary style="cursor:pointer;font-weight:600;font-size:13px;color:var(--primary-color);margin-bottom:8px;"><i class="fa-solid fa-stopwatch"></i> Timing & Stability</summary>
+                        <div class="form-grid-2" style="margin-top:10px;">
+                            <div class="form-group">
+                                <label>Dosing Duration (ms)</label>
+                                <input type="number" id="dosing-duration" class="form-control" value="250" min="100" max="2000">
+                            </div>
+                            <div class="form-group">
+                                <label>Cooldown (detik)</label>
+                                <input type="number" id="cooldown-sec" class="form-control" value="10" min="5" max="120">
+                            </div>
+                            <div class="form-group">
+                                <label>Mixing Delay (detik)</label>
+                                <input type="number" id="mixing-delay" class="form-control" value="7" min="3" max="60">
+                            </div>
+                            <div class="form-group">
+                                <label>Water Level Min (cm)</label>
+                                <input type="number" id="water-level-min" class="form-control" value="10" min="3" max="50">
+                            </div>
+                            <div class="form-group">
+                                <label>Jadwal Pagi</label>
+                                <input type="time" id="morning-time" class="form-control" value="07:00">
+                            </div>
+                            <div class="form-group">
+                                <label>Jadwal Sore</label>
+                                <input type="time" id="evening-time" class="form-control" value="17:00">
+                            </div>
+                        </div>
+                    </details>
+
+                    <button type="button" class="btn-save" id="btn-save-pengaturan">Simpan Pengaturan</button>
+                </form>
+
+                <div class="info-box" style="margin-top:16px;">
+                    <strong><i class="fa-solid fa-circle-info"></i> Info Sistem:</strong>
+                    <ul id="info-sistem-list">
+                        <li>Target PPM: 300 &plusmn; 30</li>
+                        <li>Range pH: 5.8 – 6.2</li>
+                        <li>Jadwal: 07:00 & 17:00</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Manual Control Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title"><i class="fa-solid fa-sliders"></i> Manual Control</h2>
+                </div>
+                <div class="control-list">
+                    <div class="control-item">
+                        <div class="control-label"><i class="fa-solid fa-flask"></i> Pompa Nutrisi A</div>
+                        <label class="switch">
+                            <input type="checkbox" id="toggle-pompa-a" data-device="pompa_a" class="pump-toggle">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="control-item">
+                        <div class="control-label"><i class="fa-solid fa-flask"></i> Pompa Nutrisi B</div>
+                        <label class="switch">
+                            <input type="checkbox" id="toggle-pompa-b" data-device="pompa_b" class="pump-toggle">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="control-item">
+                        <div class="control-label"><i class="fa-solid fa-arrow-up-right-dots"></i> Pompa pH Up</div>
+                        <label class="switch">
+                            <input type="checkbox" id="toggle-ph-up" data-device="ph_up" class="pump-toggle">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="control-item">
+                        <div class="control-label"><i class="fa-solid fa-arrow-down-right-dots"></i> Pompa pH Down</div>
+                        <label class="switch">
+                            <input type="checkbox" id="toggle-ph-down" data-device="ph_down" class="pump-toggle">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="control-item">
+                        <div class="control-label"><i class="fa-solid fa-retweet"></i> Pompa Sirkulasi</div>
+                        <label class="switch">
+                            <input type="checkbox" id="toggle-sirkulasi" data-device="sirkulasi" class="pump-toggle">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Dosing Log -->
+                <div style="margin-top:24px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                        <span style="font-weight:600;font-size:14px;"><i class="fa-solid fa-list-check" style="color:var(--secondary-color);"></i> Log Dosing Terakhir</span>
+                        <button id="btn-refresh-log" style="background:none;border:1px solid #ddd;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:12px;color:var(--primary-color);"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+                    </div>
+                    <div style="overflow-x:auto;border-radius:8px;border:1px solid #eee;max-height:220px;overflow-y:auto;">
+                        <table class="dosing-log-table" style="width:100%;border-collapse:collapse;white-space:nowrap;">
+                            <thead>
+                                <tr>
+                                    <th style="padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Waktu</th>
+                                    <th style="padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Aksi</th>
+                                    <th style="padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Nilai</th>
+                                    <th style="padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Target</th>
+                                    <th style="padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Durasi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dosing-log-body">
+                                <tr><td colspan="5" style="text-align:center;padding:16px;color:#999;font-size:13px;">Belum ada log dosing</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="charts-grid">
+            <div class="chart-container">
+                <div class="chart-header">
+                    <div class="chart-title">Trend PPM Harian</div>
+                    <div class="badge">Realtime</div>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="ppmChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-header">
+                    <div class="chart-title">Trend pH Harian</div>
+                    <div class="badge">Realtime</div>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="phChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-header">
+                    <div class="chart-title">Ketinggian Air</div>
+                    <div class="badge">Realtime</div>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="waterChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="table-container">
+            <div class="table-header">
+                <h2 class="table-title">Data Sensor Terakhir</h2>
+            </div>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Suhu (°C)</th>
+                            <th>Humidity (%)</th>
+                            <th>Water Level (%)</th>
+                            <th>pH</th>
+                            <th>TDS (ppm)</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="data-table-body">
+                        <tr>
+                            <td>12 Okt 2023, 08:30:00</td>
+                            <td>26.5</td>
+                            <td>65</td>
+                            <td>80</td>
+                            <td>6.0</td>
+                            <td>850</td>
+                            <td><span class="status-badge status-optimal">Optimal</span></td>
+                        </tr>
+                        <tr>
+                            <td>12 Okt 2023, 08:15:00</td>
+                            <td>26.4</td>
+                            <td>66</td>
+                            <td>80</td>
+                            <td>6.1</td>
+                            <td>845</td>
+                            <td><span class="status-badge status-optimal">Optimal</span></td>
+                        </tr>
+                        <tr>
+                            <td>12 Okt 2023, 08:00:00</td>
+                            <td>26.2</td>
+                            <td>68</td>
+                            <td>81</td>
+                            <td>6.2</td>
+                            <td>840</td>
+                            <td><span class="status-badge status-optimal">Optimal</span></td>
+                        </tr>
+                        <tr>
+                            <td>12 Okt 2023, 07:45:00</td>
+                            <td>26.0</td>
+                            <td>70</td>
+                            <td>82</td>
+                            <td>6.3</td>
+                            <td>830</td>
+                            <td><span class="status-badge status-warning">Warning</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Chart Config Common
+        const commonOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: { font: { family: "'Poppins', sans-serif" } }
+                },
+                y: {
+                    border: { display: false },
+                    grid: { color: '#eee' },
+                    ticks: { font: { family: "'Poppins', sans-serif" } }
+                }
+            },
+            elements: {
+                line: { tension: 0.4 }, // Smooth curves
+                point: { radius: 3, hoverRadius: 6 }
+            }
+        };
+
+        // Labels
+        const labels = ['06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00'];
+
+        // PPM Chart
+        const ctxPPM = document.getElementById('ppmChart').getContext('2d');
+        const gradientPPM = ctxPPM.createLinearGradient(0, 0, 0, 300);
+        gradientPPM.addColorStop(0, 'rgba(245, 127, 23, 0.4)');
+        gradientPPM.addColorStop(1, 'rgba(245, 127, 23, 0)');
+
+        const ppmChart = new Chart(ctxPPM, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'PPM',
+                    data: [780, 800, 820, 840, 850, 845, 850],
+                    borderColor: '#f57f17',
+                    backgroundColor: gradientPPM,
+                    fill: true,
+                    borderWidth: 2
+                }]
+            },
+            options: commonOptions
+        });
+
+        // pH Chart
+        const ctxPH = document.getElementById('phChart').getContext('2d');
+        const gradientPH = ctxPH.createLinearGradient(0, 0, 0, 300);
+        gradientPH.addColorStop(0, 'rgba(106, 27, 154, 0.4)');
+        gradientPH.addColorStop(1, 'rgba(106, 27, 154, 0)');
+
+        const phChart = new Chart(ctxPH, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'pH',
+                    data: [5.8, 5.9, 6.0, 6.1, 6.0, 6.0, 5.9],
+                    borderColor: '#6a1b9a',
+                    backgroundColor: gradientPH,
+                    fill: true,
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                ...commonOptions,
+                scales: {
+                    ...commonOptions.scales,
+                    y: {
+                        min: 5.0,
+                        max: 7.0,
+                        border: { display: false },
+                        grid: { color: '#eee' },
+                        ticks: { font: { family: "'Poppins', sans-serif" } }
+                    }
+                }
+            }
+        });
+
+        // Water Level Chart
+        const ctxWater = document.getElementById('waterChart').getContext('2d');
+        const gradientWater = ctxWater.createLinearGradient(0, 0, 0, 300);
+        gradientWater.addColorStop(0, 'rgba(0, 131, 143, 0.4)');
+        gradientWater.addColorStop(1, 'rgba(0, 131, 143, 0)');
+
+        const waterChart = new Chart(ctxWater, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Ketinggian Air (%)',
+                    data: [90, 88, 85, 82, 80, 80, 80],
+                    borderColor: '#00838f',
+                    backgroundColor: gradientWater,
+                    fill: true,
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                ...commonOptions,
+                scales: {
+                    ...commonOptions.scales,
+                    y: {
+                        min: 0,
+                        max: 100,
+                        border: { display: false },
+                        grid: { color: '#eee' },
+                        ticks: { font: { family: "'Poppins', sans-serif" } }
+                    }
+                }
+            }
+        });
+
+        // =====================================================
+        // DOM References
+        // =====================================================
+        const modeSelect    = document.getElementById('mode-select');
+        const switches      = document.querySelectorAll('.pump-toggle');
+        const umurBayamInput = document.getElementById('umur-bayam');
+        const btnSave       = document.getElementById('btn-save-pengaturan');
+        const infoSistemList = document.getElementById('info-sistem-list');
+        const btnRefresh    = document.getElementById('btn-refresh');
+        const btnRefreshLog = document.getElementById('btn-refresh-log');
+
+        // Smart dosing state display
+        let lastAutoConfig = {};
+
+        // =====================================================
+        // Fetch Sensor Data
+        // =====================================================
+        function fetchSensorData() {
+            fetch('/api/sensor/latest')
+                .then(r => r.json())
+                .then(data => {
+                    if (!data || Object.keys(data).length === 0) return;
+
+                    document.getElementById('val-temp').innerText  = (data.temperature  || 0).toFixed(1) + ' °C';
+                    document.getElementById('val-hum').innerText   = (data.humidity     || 0).toFixed(0) + ' %';
+                    document.getElementById('val-tds').innerText   = (data.tds_ppm      || 0).toFixed(0) + ' ppm';
+                    document.getElementById('val-ph').innerText    = (data.ph_value     || 0).toFixed(2);
+                    document.getElementById('val-water').innerText = (data.water_level  || 0).toFixed(1) + ' cm';
+
+                    // Timestamp
+                    let dateObj = new Date();
+                    if (data.timestamp) {
+                        let iso = data.timestamp.replace(' ', 'T') + 'Z';
+                        let d = new Date(iso);
+                        if (!isNaN(d.getTime())) dateObj = d;
+                    }
+                    const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                    // Update charts (keep last 20 points)
+                    [ppmChart, phChart, waterChart].forEach(c => {
+                        if (c.data.labels.length >= 20) {
+                            c.data.labels.shift();
+                            c.data.datasets[0].data.shift();
+                        }
+                    });
+                    ppmChart.data.labels.push(timeStr);
+                    ppmChart.data.datasets[0].data.push(data.tds_ppm);
+                    ppmChart.update('none');
+
+                    phChart.data.labels.push(timeStr);
+                    phChart.data.datasets[0].data.push(data.ph_value);
+                    phChart.update('none');
+
+                    waterChart.data.labels.push(timeStr);
+                    waterChart.data.datasets[0].data.push(data.water_level);
+                    waterChart.update('none');
+
+                    // Status badge
+                    const cfg = lastAutoConfig;
+                    const phLow = cfg.phMin || 5.8, phHigh = cfg.phMax || 6.2;
+                    const tgt   = cfg.targetPPM || 300, tol = cfg.ppmTolerance || 30;
+                    const phOk  = data.ph_value >= phLow && data.ph_value <= phHigh;
+                    const ppmOk = data.tds_ppm  >= (tgt - tol);
+                    const wOk   = (data.water_level || 0) >= (cfg.waterLevelMin || 10);
+                    let status = 'Optimal', cls = 'status-optimal';
+                    if (!wOk) { status = 'Air Rendah'; cls = 'status-warning'; }
+                    else if (!phOk || !ppmOk) { status = 'Perlu Koreksi'; cls = 'status-warning'; }
+
+                    const tbody = document.getElementById('data-table-body');
+                    const row = `<tr>
+                        <td>${dateObj.toLocaleString('id-ID')}</td>
+                        <td>${(data.temperature || 0).toFixed(1)}</td>
+                        <td>${(data.humidity    || 0).toFixed(0)}</td>
+                        <td>${(data.water_level || 0).toFixed(1)}</td>
+                        <td>${(data.ph_value    || 0).toFixed(2)}</td>
+                        <td>${(data.tds_ppm     || 0).toFixed(0)}</td>
+                        <td><span class="status-badge ${cls}">${status}</span></td>
+                    </tr>`;
+                    tbody.insertAdjacentHTML('afterbegin', row);
+                    if (tbody.children.length > 8) tbody.removeChild(tbody.lastChild);
+                })
+                .catch(e => console.error('Sensor fetch error:', e));
+        }
+
+        // =====================================================
+        // Fetch Auto Config dari /api/auto
+        // =====================================================
+        function fetchAutoConfig() {
+            fetch('/api/auto')
+                .then(r => r.json())
+                .then(data => {
+                    lastAutoConfig = data;
+
+                    // Sync form fields
+                    modeSelect.value = data.mode || 'MANUAL';
+                    document.getElementById('umur-bayam').value      = data.age_days        || 7;
+                    document.getElementById('target-ppm').value      = data.targetPPM       || 300;
+                    document.getElementById('ppm-tolerance').value   = data.ppmTolerance    || 30;
+                    document.getElementById('ph-min').value          = data.phMin           || 5.8;
+                    document.getElementById('ph-max').value          = data.phMax           || 6.2;
+                    document.getElementById('dosing-duration').value = data.dosingDurationMs|| 250;
+                    document.getElementById('cooldown-sec').value    = data.cooldownSec     || 10;
+                    document.getElementById('mixing-delay').value    = data.mixingDelaySec  || 7;
+                    document.getElementById('water-level-min').value = data.waterLevelMin   || 10;
+                    document.getElementById('morning-time').value    = data.morning_time    || '07:00';
+                    document.getElementById('evening-time').value    = data.evening_time    || '17:00';
+
+                    // Manual toggles
+                    if (data.manual) {
+                        document.getElementById('toggle-pompa-a').checked  = data.manual.pompa_a  === 1;
+                        document.getElementById('toggle-pompa-b').checked  = data.manual.pompa_b  === 1;
+                        document.getElementById('toggle-ph-up').checked    = data.manual.ph_up    === 1;
+                        document.getElementById('toggle-ph-down').checked  = data.manual.ph_down  === 1;
+                        document.getElementById('toggle-sirkulasi').checked= data.manual.sirkulasi === 1;
+                    }
+
+                    // Update UI state
+                    modeSelect.dispatchEvent(new Event('change'));
+
+                    // Update info box
+                    const mode = data.mode === 'AUTO' ? 'Auto (Smart Dosing)' : 'Manual';
+                    infoSistemList.innerHTML = `
+                        <li>Mode: <strong>${mode}</strong></li>
+                        <li>Target PPM: ${data.targetPPM} &plusmn; ${data.ppmTolerance}</li>
+                        <li>Range pH: ${data.phMin} &ndash; ${data.phMax}</li>
+                        <li>Dosing: ${data.dosingDurationMs}ms | Cooldown: ${data.cooldownSec}s | Mix: ${data.mixingDelaySec}s</li>
+                        <li>Jadwal: ${data.morning_time} & ${data.evening_time}</li>
+                    `;
+
+                    // Update dosing status bar
+                    updateDosingStatusUI(data.mode);
+                })
+                .catch(e => console.error('Auto config fetch error:', e));
+        }
+
+        // =====================================================
+        // Dosing Status UI
+        // =====================================================
+        function updateDosingStatusUI(mode) {
+            const dot   = document.getElementById('dosing-state-dot');
+            const badge = document.getElementById('mode-badge');
+            const label = document.getElementById('dosing-state-label');
+            badge.textContent = mode || 'MANUAL';
+            dot.className = 'dosing-state-dot';
+            if (mode === 'AUTO') {
+                dot.classList.add('dosing'); // show active when AUTO
+                label.textContent = 'Aktif – Smart Dosing';
+            } else {
+                dot.classList.add('idle');
+                label.textContent = 'Manual';
+            }
+        }
+
+        // =====================================================
+        // Fetch Dosing Log
+        // =====================================================
+        function fetchDosingLog() {
+            fetch('/api/dosing-log?limit=15')
+                .then(r => r.json())
+                .then(logs => {
+                    const tbody = document.getElementById('dosing-log-body');
+                    if (!logs || logs.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:16px;color:#999;font-size:13px;">Belum ada log dosing</td></tr>';
+                        return;
+                    }
+                    tbody.innerHTML = logs.map(log => {
+                        let actionCls = '';
+                        if (log.action === 'NUTRISI_AB')  actionCls = 'log-action-nutrisi';
+                        else if (log.action === 'pH_UP')  actionCls = 'log-action-phup';
+                        else if (log.action === 'pH_DOWN') actionCls = 'log-action-phdown';
+
+                        let ts = log.timestamp || '';
+                        try {
+                            let d = new Date(ts.replace(' ','T')+'Z');
+                            ts = isNaN(d) ? ts : d.toLocaleString('id-ID');
+                        } catch(e){}
+
+                        return `<tr>
+                            <td style="padding:7px 10px;font-size:12px;">${ts}</td>
+                            <td style="padding:7px 10px;font-size:12px;" class="${actionCls}">${log.action}</td>
+                            <td style="padding:7px 10px;font-size:12px;">${log.trigger_value != null ? parseFloat(log.trigger_value).toFixed(2) : '-'}</td>
+                            <td style="padding:7px 10px;font-size:12px;">${log.target_value  != null ? parseFloat(log.target_value).toFixed(2)  : '-'}</td>
+                            <td style="padding:7px 10px;font-size:12px;">${log.duration_ms != null ? log.duration_ms + ' ms' : '-'}</td>
+                        </tr>`;
+                    }).join('');
+                })
+                .catch(e => console.error('Dosing log fetch error:', e));
+        }
+
+        // =====================================================
+        // Mode change handler
+        // =====================================================
+        modeSelect.addEventListener('change', function () {
+            const isAuto = this.value === 'AUTO';
+            switches.forEach(sw => sw.disabled = isAuto);
+        });
+
+        // =====================================================
+        // Manual Toggle Switch Events
+        // =====================================================
+        switches.forEach(sw => {
+            sw.addEventListener('change', function () {
+                const device = this.getAttribute('data-device');
+                const state  = this.checked ? 1 : 0;
+                fetch('/api/manual', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ [device]: state })
+                })
+                .then(r => r.json())
+                .then(d => console.log('Manual updated:', d))
+                .catch(e => console.error(e));
+            });
+        });
+
+        // =====================================================
+        // Save Smart Dosing Config → POST /api/auto
+        // =====================================================
+        btnSave.addEventListener('click', function () {
+            const payload = {
+                mode:             modeSelect.value,
+                age_days:         parseInt(document.getElementById('umur-bayam').value)    || 7,
+                target_ppm:       parseInt(document.getElementById('target-ppm').value)    || 300,
+                ppm_tolerance:    parseInt(document.getElementById('ppm-tolerance').value) || 30,
+                ph_min:           parseFloat(document.getElementById('ph-min').value)      || 5.8,
+                ph_max:           parseFloat(document.getElementById('ph-max').value)      || 6.2,
+                dosing_duration_ms: parseInt(document.getElementById('dosing-duration').value) || 250,
+                cooldown_sec:     parseInt(document.getElementById('cooldown-sec').value)  || 10,
+                mixing_delay_sec: parseInt(document.getElementById('mixing-delay').value)  || 7,
+                water_level_min:  parseFloat(document.getElementById('water-level-min').value) || 10,
+                morning_time:     document.getElementById('morning-time').value || '07:00',
+                evening_time:     document.getElementById('evening-time').value || '17:00'
+            };
+
+            fetch('/api/auto', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(r => r.json())
+            .then(data => {
+                lastAutoConfig = data;
+                
+                // Update form textboxes with data from DB if auto-overwritten based on age
+                document.getElementById('target-ppm').value      = data.targetPPM       || payload.target_ppm;
+                document.getElementById('ppm-tolerance').value   = data.ppmTolerance    || payload.ppm_tolerance;
+                document.getElementById('ph-min').value          = data.phMin           || payload.ph_min;
+                document.getElementById('ph-max').value          = data.phMax           || payload.ph_max;
+
+                modeSelect.dispatchEvent(new Event('change'));
+                updateDosingStatusUI(data.mode);
+
+                const isAuto = data.mode === 'AUTO';
+                infoSistemList.innerHTML = `
+                    <li>Mode: <strong>${isAuto ? 'Auto (Smart Dosing)' : 'Manual'}</strong></li>
+                    <li>Target PPM: ${data.targetPPM} &plusmn; ${data.ppmTolerance}</li>
+                    <li>Range pH: ${data.phMin} &ndash; ${data.phMax}</li>
+                    <li>Dosing: ${data.dosingDurationMs}ms | Cooldown: ${data.cooldownSec}s | Mix: ${data.mixingDelaySec}s</li>
+                    <li>Jadwal: ${data.morning_time} & ${data.evening_time}</li>
+                `;
+
+                const orig = btnSave.innerHTML;
+                btnSave.innerHTML = '<i class="fa-solid fa-check"></i> Tersimpan!';
+                btnSave.style.background = '#1b5e20';
+                setTimeout(() => { btnSave.innerHTML = orig; btnSave.style.background = ''; }, 2000);
+            })
+            .catch(e => console.error('Save config error:', e));
+        });
+
+        // =====================================================
+        // Refresh buttons
+        // =====================================================
+        btnRefresh.addEventListener('click', () => {
+            fetchSensorData();
+            fetchAutoConfig();
+            fetchDosingLog();
+        });
+
+        btnRefreshLog.addEventListener('click', fetchDosingLog);
+
+        // =====================================================
+        // Initialize & Polling
+        // =====================================================
+        fetchAutoConfig();
+        fetchSensorData();
+        fetchDosingLog();
+
+        setInterval(fetchSensorData,  3000);   // sensor tiap 3 detik
+        setInterval(fetchAutoConfig,  15000);  // config tiap 15 detik
+        setInterval(fetchDosingLog,   10000);  // log tiap 10 detik
+    </script>
+</body>
+
+</html>
