@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_tefmplate
 import os
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
@@ -9,11 +9,28 @@ BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 # Fallback to local sqlite file when DATABASE_URL is not provided
 DB_FILE = os.path.join(BASE_DIR, "database", "database.db")
-database_url = os.getenv('DATABASE_URL') or f"sqlite:///{DB_FILE}"
+
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+database_url = os.getenv("DATABASE_URL")
+
+if database_url and database_url.startswith("postgres://"):
+    database_url = database_url.replace(
+        "postgres://",
+        "postgresql://",
+        1
+    )
+
+app.config["SQLALCHEMY_DATABASE_URI"] = (
+    database_url or f"sqlite:///{DB_FILE}"
+)
+
+
 db = SQLAlchemy(app)
+with app.app_context():
+    init_db()
+    load_auto_control()
 
 manual_control = {
     "pompa_a": 0,
