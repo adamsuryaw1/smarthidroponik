@@ -580,7 +580,6 @@ with app.app_context():
     init_db()
     load_auto_control()
 
-if __name__ == '__main__':
 @app.route('/api/db-check')
 def db_check():
     inspector = inspect(db.engine)
