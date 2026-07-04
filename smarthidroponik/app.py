@@ -1,11 +1,19 @@
 from flask import Flask, request, jsonify, render_template
+import logging
 import os
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import func
+from sqlalchemy import func, inspect
 
 app = Flask(__name__)
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+
+debug_mode = os.getenv('FLASK_DEBUG', '0').lower() in ('1', 'true', 'yes')
+logging.basicConfig(
+    level=logging.DEBUG if debug_mode else logging.INFO,
+    format='%(asctime)s %(levelname)s %(message)s'
+)
+app.logger.setLevel(logging.DEBUG if debug_mode else logging.INFO)
 
 # Fallback to local sqlite file when DATABASE_URL is not provided
 DB_FILE = os.path.join(BASE_DIR, "database", "database.db")
@@ -128,6 +136,7 @@ class GrowthPhase(db.Model):
 # INIT DATABASE
 # =========================
 def init_db():
+    db.create_all()
     ac = AutoControl.query.get(1)
     if ac is None:
         ac = AutoControl(
@@ -422,7 +431,7 @@ def auto_api():
                     auto_control['ph_min'] = db_targets['ph_min']
                     auto_control['ph_max'] = db_targets['ph_max']
             except Exception as e:
-                print("Error fetching DB targets:", e)
+                app.logger.warning('Error fetching DB targets: %s', e)
 
         # Clamp values
         auto_control['dosing_duration_ms'] = max(100, min(auto_control['dosing_duration_ms'], 2000))
@@ -572,4 +581,16 @@ with app.app_context():
     load_auto_control()
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+@app.route('/api/db-check')
+def db_check():
+    inspector = inspect(db.engine)
+    tables = inspector.get_table_names()
+    return jsonify({
+        'database_url': app.config['SQLALCHEMY_DATABASE_URI'],
+        'tables': tables,
+        'auto_control_exists': 'auto_control' in tables
+    })
+
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=debug_mode)
