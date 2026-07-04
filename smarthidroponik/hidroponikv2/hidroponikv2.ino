@@ -39,11 +39,11 @@ const char* password = "melon123";
 // ==============================
 // SERVER CONFIG
 // ==============================
-const char* serverUrl  = "http://192.168.1.12:5000/api/sensor";
-const char* manualUrl  = "http://192.168.1.12:5000/api/manual";
-const char* autoUrl    = "http://192.168.1.12:5000/api/auto";
-const char* reportUrl  = "http://192.168.1.12:5000/api/report";
-const char* dosingLogUrl ="http://192.168.1.12:5000/api/dosing-log";
+const char* serverUrl  = "https://smarthidroponik-production.up.railway.app/api/sensor";
+const char* manualUrl  = "https://smarthidroponik-production.up.railway.app/api/manual";
+const char* autoUrl    = "https://smarthidroponik-production.up.railway.app/api/auto";
+const char* reportUrl  = "https://smarthidroponik-production.up.railway.app/api/report";
+const char* dosingLogUrl ="https://smarthidroponik-production.up.railway.app/api/dosing-log";
 
 // ==============================
 // KALIBRASI
