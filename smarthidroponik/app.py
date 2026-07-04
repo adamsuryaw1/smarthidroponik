@@ -1,16 +1,19 @@
 from flask import Flask, request, jsonify, render_template
-import sqlite3
 import os
 from datetime import datetime
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import func
 
 app = Flask(__name__)
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
-DB_NAME = os.path.join(
-    BASE_DIR,
-    "database",
-    "database.db"
-)
+# Fallback to local sqlite file when DATABASE_URL is not provided
+DB_FILE = os.path.join(BASE_DIR, "database", "database.db")
+database_url = os.getenv('DATABASE_URL') or f"sqlite:///{DB_FILE}"
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)
 
 manual_control = {
     "pompa_a": 0,
@@ -39,147 +42,145 @@ auto_control = {
 
 planting_date = None
 
-def get_db():
-    return sqlite3.connect(DB_NAME)
+
+# =========================
+# MODELS
+# =========================
+class SensorData(db.Model):
+    __tablename__ = 'sensor_data'
+    id = db.Column(db.Integer, primary_key=True)
+    temperature = db.Column(db.Float)
+    humidity = db.Column(db.Float)
+    water_level = db.Column(db.Float)
+    ph_value = db.Column(db.Float)
+    tds_ppm = db.Column(db.Float)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class WateringReport(db.Model):
+    __tablename__ = 'watering_reports'
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    session = db.Column(db.String)
+    ph_value = db.Column(db.Float)
+    tds_ppm = db.Column(db.Float)
+    temperature = db.Column(db.Float)
+    humidity = db.Column(db.Float)
+    water_level = db.Column(db.Float)
+    mode = db.Column(db.String)
+
+
+class AutoControl(db.Model):
+    __tablename__ = 'auto_control'
+    id = db.Column(db.Integer, primary_key=True)
+    mode = db.Column(db.String, nullable=False)
+    age_days = db.Column(db.Integer, nullable=False)
+    morning_time = db.Column(db.String, nullable=False)
+    evening_time = db.Column(db.String, nullable=False)
+    target_ppm = db.Column(db.Integer, nullable=False, default=300)
+    ph_min = db.Column(db.Float, nullable=False, default=5.8)
+    ph_max = db.Column(db.Float, nullable=False, default=6.2)
+    ppm_tolerance = db.Column(db.Integer, nullable=False, default=30)
+    ph_tolerance = db.Column(db.Float, nullable=False, default=0.2)
+    dosing_duration_ms = db.Column(db.Integer, nullable=False, default=250)
+    cooldown_sec = db.Column(db.Integer, nullable=False, default=10)
+    mixing_delay_sec = db.Column(db.Integer, nullable=False, default=7)
+    water_level_min = db.Column(db.Float, nullable=False, default=10.0)
+    updated_at = db.Column(db.DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class DosingLog(db.Model):
+    __tablename__ = 'dosing_log'
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    action = db.Column(db.String, nullable=False)
+    trigger_value = db.Column(db.Float)
+    target_value = db.Column(db.Float)
+    duration_ms = db.Column(db.Integer)
+    note = db.Column(db.String)
+
+
+class GrowthPhase(db.Model):
+    __tablename__ = 'growth_phases'
+    id = db.Column(db.Integer, primary_key=True)
+    umur_min = db.Column(db.Integer)
+    umur_max = db.Column(db.Integer)
+    target_ppm_min = db.Column(db.Integer)
+    target_ppm_max = db.Column(db.Integer)
+    ph_min = db.Column(db.Float)
+    ph_max = db.Column(db.Float)
+
 
 # =========================
 # INIT DATABASE
 # =========================
 def init_db():
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
+    db.create_all()
 
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS sensor_data (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        temperature REAL,
-        humidity REAL,
-        water_level REAL,
-        ph_value REAL,
-        tds_ppm REAL,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS watering_reports (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-        session TEXT,
-        ph_value REAL,
-        tds_ppm REAL,
-        temperature REAL,
-        humidity REAL,
-        water_level REAL,
-        mode TEXT
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS auto_control (
-        id INTEGER PRIMARY KEY,
-        mode TEXT NOT NULL,
-        age_days INTEGER NOT NULL,
-        morning_time TEXT NOT NULL,
-        evening_time TEXT NOT NULL,
-        target_ppm INTEGER NOT NULL DEFAULT 300,
-        ph_min REAL NOT NULL DEFAULT 5.8,
-        ph_max REAL NOT NULL DEFAULT 6.2,
-        ppm_tolerance INTEGER NOT NULL DEFAULT 30,
-        ph_tolerance REAL NOT NULL DEFAULT 0.2,
-        dosing_duration_ms INTEGER NOT NULL DEFAULT 250,
-        cooldown_sec INTEGER NOT NULL DEFAULT 10,
-        mixing_delay_sec INTEGER NOT NULL DEFAULT 7,
-        water_level_min REAL NOT NULL DEFAULT 10.0,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS dosing_log (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-        action TEXT NOT NULL,
-        trigger_value REAL,
-        target_value REAL,
-        duration_ms INTEGER,
-        note TEXT
-    )
-    """)
-
-    cursor.execute("SELECT COUNT(*) FROM auto_control")
-    if cursor.fetchone()[0] == 0:
-        cursor.execute(
-            """INSERT INTO auto_control
-            (id, mode, age_days, morning_time, evening_time,
-             target_ppm, ph_min, ph_max, ppm_tolerance, ph_tolerance,
-             dosing_duration_ms, cooldown_sec, mixing_delay_sec, water_level_min)
-            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (auto_control['mode'], auto_control['age_days'],
-             auto_control['morning_time'], auto_control['evening_time'],
-             auto_control['target_ppm'], auto_control['ph_min'], auto_control['ph_max'],
-             auto_control['ppm_tolerance'], auto_control['ph_tolerance'],
-             auto_control['dosing_duration_ms'], auto_control['cooldown_sec'],
-             auto_control['mixing_delay_sec'], auto_control['water_level_min'])
+    ac = AutoControl.query.get(1)
+    if ac is None:
+        ac = AutoControl(
+            id=1,
+            mode=auto_control['mode'],
+            age_days=auto_control['age_days'],
+            morning_time=auto_control['morning_time'],
+            evening_time=auto_control['evening_time'],
+            target_ppm=auto_control['target_ppm'],
+            ph_min=auto_control['ph_min'],
+            ph_max=auto_control['ph_max'],
+            ppm_tolerance=auto_control['ppm_tolerance'],
+            ph_tolerance=auto_control['ph_tolerance'],
+            dosing_duration_ms=auto_control['dosing_duration_ms'],
+            cooldown_sec=auto_control['cooldown_sec'],
+            mixing_delay_sec=auto_control['mixing_delay_sec'],
+            water_level_min=auto_control['water_level_min']
         )
-
-    conn.commit()
-    conn.close()
+        db.session.add(ac)
+        db.session.commit()
 
 # =========================
 # DATABASE HELPERS
 # =========================
 def load_auto_control():
     global auto_control
-    conn = get_db()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT mode, age_days, morning_time, evening_time,
-               target_ppm, ph_min, ph_max, ppm_tolerance, ph_tolerance,
-               dosing_duration_ms, cooldown_sec, mixing_delay_sec, water_level_min
-        FROM auto_control WHERE id = 1
-    """)
-    row = cursor.fetchone()
-    conn.close()
-
-    if row is not None:
-        auto_control['mode']               = row[0]
-        auto_control['age_days']           = row[1]
-        auto_control['morning_time']       = row[2]
-        auto_control['evening_time']       = row[3]
-        auto_control['target_ppm']         = row[4]
-        auto_control['ph_min']             = row[5]
-        auto_control['ph_max']             = row[6]
-        auto_control['ppm_tolerance']      = row[7]
-        auto_control['ph_tolerance']       = row[8]
-        auto_control['dosing_duration_ms'] = row[9]
-        auto_control['cooldown_sec']       = row[10]
-        auto_control['mixing_delay_sec']   = row[11]
-        auto_control['water_level_min']    = row[12]
+    ac = AutoControl.query.get(1)
+    if ac:
+        auto_control['mode'] = ac.mode
+        auto_control['age_days'] = ac.age_days
+        auto_control['morning_time'] = ac.morning_time
+        auto_control['evening_time'] = ac.evening_time
+        auto_control['target_ppm'] = ac.target_ppm
+        auto_control['ph_min'] = ac.ph_min
+        auto_control['ph_max'] = ac.ph_max
+        auto_control['ppm_tolerance'] = ac.ppm_tolerance
+        auto_control['ph_tolerance'] = ac.ph_tolerance
+        auto_control['dosing_duration_ms'] = ac.dosing_duration_ms
+        auto_control['cooldown_sec'] = ac.cooldown_sec
+        auto_control['mixing_delay_sec'] = ac.mixing_delay_sec
+        auto_control['water_level_min'] = ac.water_level_min
 
 
 def save_auto_control():
-    conn = get_db()
-    cursor = conn.cursor()
+    ac = AutoControl.query.get(1)
+    if not ac:
+        ac = AutoControl(id=1)
+        db.session.add(ac)
 
-    cursor.execute(
-        """INSERT OR REPLACE INTO auto_control
-        (id, mode, age_days, morning_time, evening_time,
-         target_ppm, ph_min, ph_max, ppm_tolerance, ph_tolerance,
-         dosing_duration_ms, cooldown_sec, mixing_delay_sec, water_level_min,
-         updated_at)
-        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)""",
-        (auto_control['mode'], auto_control['age_days'],
-         auto_control['morning_time'], auto_control['evening_time'],
-         auto_control['target_ppm'], auto_control['ph_min'], auto_control['ph_max'],
-         auto_control['ppm_tolerance'], auto_control['ph_tolerance'],
-         auto_control['dosing_duration_ms'], auto_control['cooldown_sec'],
-         auto_control['mixing_delay_sec'], auto_control['water_level_min'])
-    )
+    ac.mode = auto_control['mode']
+    ac.age_days = auto_control['age_days']
+    ac.morning_time = auto_control['morning_time']
+    ac.evening_time = auto_control['evening_time']
+    ac.target_ppm = auto_control['target_ppm']
+    ac.ph_min = auto_control['ph_min']
+    ac.ph_max = auto_control['ph_max']
+    ac.ppm_tolerance = auto_control['ppm_tolerance']
+    ac.ph_tolerance = auto_control['ph_tolerance']
+    ac.dosing_duration_ms = auto_control['dosing_duration_ms']
+    ac.cooldown_sec = auto_control['cooldown_sec']
+    ac.mixing_delay_sec = auto_control['mixing_delay_sec']
+    ac.water_level_min = auto_control['water_level_min']
 
-    conn.commit()
-    conn.close()
+    db.session.commit()
 
 # =========================
 # DASHBOARD
@@ -206,17 +207,15 @@ def receive_sensor():
     tds_ppm      = data.get("tds_ppm")
     water_level  = data.get("water_level")
 
-    conn = get_db()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        INSERT INTO sensor_data
-        (temperature, humidity, water_level, ph_value, tds_ppm)
-        VALUES (?, ?, ?, ?, ?)
-    """, (temperature, humidity, water_level, ph_value, tds_ppm))
-
-    conn.commit()
-    conn.close()
+    sd = SensorData(
+        temperature=temperature,
+        humidity=humidity,
+        water_level=water_level,
+        ph_value=ph_value,
+        tds_ppm=tds_ppm
+    )
+    db.session.add(sd)
+    db.session.commit()
 
     return jsonify({"status": "success"}), 200
 
@@ -225,50 +224,30 @@ def receive_sensor():
 # =========================
 @app.route('/api/sensor/latest')
 def latest_sensor():
-
-    conn = get_db()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-    SELECT temperature, humidity, water_level, ph_value, tds_ppm, timestamp
-    FROM sensor_data
-    ORDER BY id DESC
-    LIMIT 1
-    """)
-
-    row = cursor.fetchone()
-    conn.close()
-
+    row = SensorData.query.order_by(SensorData.id.desc()).first()
     if row is None:
         return jsonify({}), 200
 
     return jsonify({
-        "temperature": row[0],
-        "humidity":    row[1],
-        "water_level": row[2],
-        "ph_value":    row[3],
-        "tds_ppm":     row[4],
-        "timestamp":   row[5]
+        "temperature": row.temperature,
+        "humidity": row.humidity,
+        "water_level": row.water_level,
+        "ph_value": row.ph_value,
+        "tds_ppm": row.tds_ppm,
+        "timestamp": row.timestamp.isoformat() if row.timestamp else None
     })
 
 
 def get_targets_from_db(age_days):
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT target_ppm_min, target_ppm_max, ph_min, ph_max
-        FROM growth_phases
-        WHERE ? >= umur_min AND ? <= umur_max
-        LIMIT 1
-    """, (age_days, age_days))
-    row = cursor.fetchone()
-    conn.close()
-    
-    if row:
-        ppm_min, ppm_max, ph_min, ph_max = row
+    gp = GrowthPhase.query.filter(age_days >= GrowthPhase.umur_min, age_days <= GrowthPhase.umur_max).first()
+    if gp:
+        ppm_min = gp.target_ppm_min or 0
+        ppm_max = gp.target_ppm_max or 0
+        ph_min = gp.ph_min
+        ph_max = gp.ph_max
         target_ppm = (ppm_min + ppm_max) // 2
         ppm_tolerance = (ppm_max - ppm_min) // 2
-        if ppm_tolerance < 30: 
+        if ppm_tolerance < 30:
             ppm_tolerance = 30
         return {
             "target_ppm": target_ppm,
@@ -476,38 +455,32 @@ def dosing_log_api():
         duration_ms   = data.get("duration_ms")
         note          = data.get("note", "")
 
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO dosing_log (action, trigger_value, target_value, duration_ms, note)
-            VALUES (?, ?, ?, ?, ?)
-        """, (action, trigger_value, target_value, duration_ms, note))
-        conn.commit()
-        conn.close()
+        dl = DosingLog(
+            action=action,
+            trigger_value=trigger_value,
+            target_value=target_value,
+            duration_ms=duration_ms,
+            note=note
+        )
+        db.session.add(dl)
+        db.session.commit()
 
         return jsonify({"status": "success"}), 201
 
     else:
         limit = int(request.args.get('limit', 20))
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT id, timestamp, action, trigger_value, target_value, duration_ms, note
-            FROM dosing_log ORDER BY id DESC LIMIT ?
-        """, (limit,))
-        rows = cursor.fetchall()
-        conn.close()
+        rows = DosingLog.query.order_by(DosingLog.id.desc()).limit(limit).all()
 
         results = []
         for row in rows:
             results.append({
-                "id":            row[0],
-                "timestamp":     row[1],
-                "action":        row[2],
-                "trigger_value": row[3],
-                "target_value":  row[4],
-                "duration_ms":   row[5],
-                "note":          row[6]
+                "id": row.id,
+                "timestamp": row.timestamp.isoformat() if row.timestamp else None,
+                "action": row.action,
+                "trigger_value": row.trigger_value,
+                "target_value": row.target_value,
+                "duration_ms": row.duration_ms,
+                "note": row.note
             })
 
         return jsonify(results)
@@ -530,15 +503,17 @@ def watering_report_api():
         water_level = data.get("water_level")
         mode        = data.get("mode", "MANUAL")
 
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO watering_reports
-            (session, ph_value, tds_ppm, temperature, humidity, water_level, mode)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (session_val, ph_value, tds_ppm, temperature, humidity, water_level, mode))
-        conn.commit()
-        conn.close()
+        wr = WateringReport(
+            session=session_val,
+            ph_value=ph_value,
+            tds_ppm=tds_ppm,
+            temperature=temperature,
+            humidity=humidity,
+            water_level=water_level,
+            mode=mode
+        )
+        db.session.add(wr)
+        db.session.commit()
 
         return jsonify({"status": "success"}), 201
 
@@ -546,36 +521,29 @@ def watering_report_api():
         date_filter    = request.args.get('date')
         session_filter = request.args.get('session')
 
-        query = "SELECT id, timestamp, session, ph_value, tds_ppm, temperature, humidity, water_level, mode FROM watering_reports WHERE 1=1"
-        params = []
-
+        q = WateringReport.query
         if date_filter:
-            query += " AND date(timestamp) = ?"
-            params.append(date_filter)
+            try:
+                q = q.filter(func.date(WateringReport.timestamp) == date_filter)
+            except Exception:
+                pass
         if session_filter and session_filter != 'Semua':
-            query += " AND session = ?"
-            params.append(session_filter)
+            q = q.filter(WateringReport.session == session_filter)
 
-        query += " ORDER BY id DESC"
-
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-        conn.close()
+        rows = q.order_by(WateringReport.id.desc()).all()
 
         results = []
         for row in rows:
             results.append({
-                "id":          row[0],
-                "timestamp":   row[1],
-                "session":     row[2],
-                "ph_value":    row[3],
-                "tds_ppm":     row[4],
-                "temperature": row[5],
-                "humidity":    row[6],
-                "water_level": row[7],
-                "mode":        row[8]
+                "id": row.id,
+                "timestamp": row.timestamp.isoformat() if row.timestamp else None,
+                "session": row.session,
+                "ph_value": row.ph_value,
+                "tds_ppm": row.tds_ppm,
+                "temperature": row.temperature,
+                "humidity": row.humidity,
+                "water_level": row.water_level,
+                "mode": row.mode
             })
 
         return jsonify(results)
